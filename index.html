@@ -192,10 +192,10 @@ const dl2 = new THREE.DirectionalLight(0xccddff, 0.3);
 dl2.position.set(-3, 5, 5); scene.add(dl2);
 
 const cam = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 60);
-cam.position.set(0, 1.6, 0.8);
+cam.position.set(0, 1.6, 1.2);
 
 // Orientación inicial: mirando al pizarrón
-let yaw = 0, pitch = -0.06;
+let yaw = 0, pitch = 0.10;
 
 // ════════════════════════════════════════
 // SALÓN — geometría mejorada
@@ -536,9 +536,7 @@ function initAbsSensor(){
 let lastAlpha=null;
 window.addEventListener('deviceorientation',e=>{
   if(!vrMode||!e.alpha) return;
-  // Si AbsoluteOrientationSensor ya funciona, no usar deviceorientation
   if(absSensor&&gyroOK) return;
-  gyroOK=true;
   const q=computeGyroQuat(e.alpha, e.beta, e.gamma);
   applyGyroQuat(q);
 },true);
@@ -584,7 +582,14 @@ const RCAM=new THREE.PerspectiveCamera(80,1,.1,60);
 const IPD=0.064;
 
 function resize(){
-  const W=innerWidth,H=innerHeight;
+  // En landscape fullscreen el innerWidth puede ser menor que innerHeight brevemente
+  let W=window.innerWidth, H=window.innerHeight;
+  // Forzar landscape: si alto > ancho, intercambiar
+  if(vrMode && H > W){
+    W = screen.availWidth > screen.availHeight ? screen.availWidth : screen.availHeight;
+    H = screen.availWidth > screen.availHeight ? screen.availHeight : screen.availWidth;
+    if(H>W){const t=W;W=H;H=t;} // swap si sigue mal
+  }
   renderer.setSize(W,H,false);
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
   cam.aspect=W/H; cam.updateProjectionMatrix();
@@ -592,9 +597,11 @@ function resize(){
 
 function activarVR(){
   vrMode=true; qRef=null; gyroOK=false;
+  // Iniciar con la orientación actual de la cámara
   const EU2=new THREE.Euler(pitch,yaw,0,'YXZ');
   GQ.setFromEuler(EU2);
 
+  // UI al ojo izquierdo
   document.getElementById('btnVR').textContent='✕ Salir VR';
   document.getElementById('topright').style.display='none';
   ['instruccion','feedback'].forEach(id=>{
@@ -604,21 +611,29 @@ function activarVR(){
   document.getElementById('gaze').style.left='25%';
   document.getElementById('gaze').style.transform='translate(-50%,-50%)';
 
-  // Fullscreen
-  const el=document.documentElement;
-  const fsReq=el.requestFullscreen||el.webkitRequestFullscreen||
-               el.mozRequestFullScreen||el.msRequestFullscreen;
-  if(fsReq) fsReq.call(el).catch(()=>{});
+  // Intentar fullscreen en el body (más compatible con Android Chrome)
+  const targets=[document.body, canvas, document.documentElement];
+  for(const el of targets){
+    const fn=el.requestFullscreen||el.webkitRequestFullscreen||
+              el.mozRequestFullScreen||el.msRequestFullscreen;
+    if(fn){ fn.call(el).catch(()=>{}); break; }
+  }
 
   // Landscape
-  if(screen.orientation&&screen.orientation.lock)
-    screen.orientation.lock('landscape').catch(()=>{});
+  try{
+    if(screen.orientation&&screen.orientation.lock)
+      screen.orientation.lock('landscape').catch(()=>{});
+  }catch(e){}
 
-  // Iniciar sensor absoluto si disponible
+  // Iniciar sensores
   if(!absSensor) initAbsSensor();
-  if(absSensor) absSensor.start().catch(()=>{});
+  if(absSensor){ try{absSensor.start();}catch(e){} }
 
-  setTimeout(resize,300); setTimeout(resize,800); setTimeout(resize,1500);
+  // Múltiples resize para capturar el tamaño correcto
+  setTimeout(resize,200);
+  setTimeout(resize,600);
+  setTimeout(resize,1200);
+  setTimeout(resize,2000);
 }
 
 function toggleVR(){
