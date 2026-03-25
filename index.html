@@ -124,11 +124,11 @@ renderer.autoClear=false; // controlamos manualmente
 // ════════════════════════════════
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87CEEB);
-scene.fog=new THREE.Fog(0x87CEEB,18,38);
+scene.fog=new THREE.Fog(0x87CEEB,12,35);
 
 // Cámara — posición inicial mirando AL FRENTE (pitch=0)
 const cam=new THREE.PerspectiveCamera(60,W0/H0,0.1,60);
-cam.position.set(0,1.6,1.5);
+cam.position.set(0,1.6,0.2);
 // Aseguramos que mire al frente
 cam.lookAt(0,1.6,-4.9);
 
@@ -412,9 +412,11 @@ let aOff=null;
 })();
 
 // deviceorientation
-let qInitInv=null; // quaternion inverso inicial para fijar el frente
+let qInitInv=null;      // corrección para que arranque mirando al frente
+let qCamAtVRStart=null; // orientación de cámara en el momento de activar VR
 window.addEventListener('deviceorientation',e=>{
-  if(!e.alpha||!vrMode)return;
+  if(!e.alpha)return;
+  if(!vrMode){qInitInv=null; qCamAtVRStart=null; return;}
   gyroOK=true;
   if(aOff===null)aOff=e.alpha;
   EU.set(
@@ -428,14 +430,17 @@ window.addEventListener('deviceorientation',e=>{
   const ang=(screen.orientation||{}).angle||window.orientation||0;
   QS.setFromAxisAngle(ZEE,-THREE.MathUtils.degToRad(ang));
   GQRAW.multiply(QS);
-  // Fijar orientación inicial: el primer frame define el "frente"
+  // Primer frame: calcular corrección entre giroscopio y orientación actual
   if(qInitInv===null){
+    // qInitInv convierte giroscopio actual -> orientación que tenía la cámara
     qInitInv=GQRAW.clone().invert();
+    qCamAtVRStart=cam.quaternion.clone();
   }
-  // Aplicar corrección para que arranque mirando al pizarrón
-  const corrected=qInitInv.clone().multiply(GQRAW).invert();
+  // Aplicar: corrección = orientación_inicial_camara * (giroscopio_inicial^-1 * giroscopio_actual)
+  const delta=qInitInv.clone().multiply(GQRAW);
+  const result=qCamAtVRStart.clone().multiply(delta);
   // Suavizado fuerte anti-bailoteo
-  GQ.slerp(corrected,0.07);
+  GQ.slerp(result,0.08);
 },true);
 
 // ════════════════════════════════
@@ -462,7 +467,7 @@ function toggleVR(){
        typeof DeviceOrientationEvent.requestPermission==='function'){
       DeviceOrientationEvent.requestPermission().catch(()=>{});
     }
-    vrMode=true; aOff=null; gyroOK=false; qInitInv=null;
+    vrMode=true; aOff=null; gyroOK=false; qInitInv=null; qCamAtVRStart=null;
     document.getElementById('btnVR').textContent='✕ Salir VR';
     document.getElementById('topright').style.display='none';
     // Mover UI al ojo izquierdo
