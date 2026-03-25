@@ -198,7 +198,7 @@ addBox(0.06,0.75,0.9,0x7a4a1a, 1,0.37,-3.8);
 // ════════════════════════════════
 // TARJETAS
 // ════════════════════════════════
-const CW=0.95, CH=0.50;
+const CW=1.1, CH=0.58;
 const BZ=-4.82; // z del pizarrón
 const WY=2.55;  // y palabras
 const SY=1.35;  // y slots
@@ -210,7 +210,7 @@ function makeTex(word,bg,fg){
   const cx=cv.getContext('2d');
   cx.fillStyle=bg; cx.fillRect(0,0,256,128);
   cx.strokeStyle='#888';cx.lineWidth=3;cx.strokeRect(3,3,250,122);
-  const fs=word.length>7?28:word.length>5?36:44;
+  const fs=word.length>7?36:word.length>5?46:56;
   cx.font=`bold ${fs}px Arial`;cx.fillStyle=fg;
   cx.textAlign='center';cx.textBaseline='middle';cx.fillText(word,128,60);
   return new THREE.CanvasTexture(cv);
@@ -221,7 +221,7 @@ function makeSlotTex(n){
   cx.fillStyle='rgba(255,255,255,0.07)';cx.fillRect(0,0,256,128);
   cx.strokeStyle='rgba(255,255,255,0.6)';cx.lineWidth=3;cx.setLineDash([8,5]);
   cx.strokeRect(5,5,246,118);
-  cx.font='bold 30px Arial';cx.fillStyle='rgba(255,255,255,0.4)';
+  cx.font='bold 42px Arial';cx.fillStyle='rgba(255,255,255,0.6)';
   cx.textAlign='center';cx.textBaseline='middle';cx.fillText(n+'',128,64);
   return new THREE.CanvasTexture(cv);
 }
@@ -229,7 +229,7 @@ function makeTitleTex(n){
   const cv=document.createElement('canvas');cv.width=512;cv.height=60;
   const cx=cv.getContext('2d');
   cx.fillStyle='#1a4a2a';cx.fillRect(0,0,512,60);
-  cx.font='bold 22px Arial';cx.fillStyle='#FFD700';
+  cx.font='bold 28px Arial';cx.fillStyle='#FFD700';
   cx.textAlign='center';cx.textBaseline='middle';
   cx.fillText(`Oración ${n} de 20  —  Ordena las palabras`,256,30);
   return new THREE.CanvasTexture(cv);
@@ -414,9 +414,13 @@ let aOff=null;
 // deviceorientation
 let qInitInv=null;      // corrección para que arranque mirando al frente
 let qCamAtVRStart=null; // orientación de cámara en el momento de activar VR
+// Buffer para media móvil de quaternions (estabilización)
+const GYRO_BUF=[];
+const GYRO_BUF_SIZE=12; // promedio de 12 frames = muy estable
+
 window.addEventListener('deviceorientation',e=>{
   if(!e.alpha)return;
-  if(!vrMode){qInitInv=null; qCamAtVRStart=null; return;}
+  if(!vrMode){qInitInv=null;qCamAtVRStart=null;GYRO_BUF.length=0;return;}
   gyroOK=true;
   if(aOff===null)aOff=e.alpha;
   EU.set(
@@ -430,17 +434,27 @@ window.addEventListener('deviceorientation',e=>{
   const ang=(screen.orientation||{}).angle||window.orientation||0;
   QS.setFromAxisAngle(ZEE,-THREE.MathUtils.degToRad(ang));
   GQRAW.multiply(QS);
-  // Primer frame: calcular corrección entre giroscopio y orientación actual
+
   if(qInitInv===null){
-    // qInitInv convierte giroscopio actual -> orientación que tenía la cámara
     qInitInv=GQRAW.clone().invert();
     qCamAtVRStart=cam.quaternion.clone();
+    GYRO_BUF.length=0;
   }
-  // Aplicar: corrección = orientación_inicial_camara * (giroscopio_inicial^-1 * giroscopio_actual)
   const delta=qInitInv.clone().multiply(GQRAW);
   const result=qCamAtVRStart.clone().multiply(delta);
-  // Suavizado fuerte anti-bailoteo
-  GQ.slerp(result,0.08);
+
+  // Agregar al buffer
+  GYRO_BUF.push(result.clone());
+  if(GYRO_BUF.length>GYRO_BUF_SIZE) GYRO_BUF.shift();
+
+  // Promedio de quaternions en el buffer (slerp acumulado)
+  if(GYRO_BUF.length>0){
+    const avg=GYRO_BUF[0].clone();
+    for(let i=1;i<GYRO_BUF.length;i++) avg.slerp(GYRO_BUF[i],1/(i+1));
+    // Solo actualizar si el movimiento es mayor a umbral
+    const angleDiff=GQ.angleTo(avg);
+    if(angleDiff>0.008) GQ.copy(avg); // ~0.5 grados de umbral
+  }
 },true);
 
 // ════════════════════════════════
@@ -523,7 +537,11 @@ function loop(t){
 
   // ── Orientación cámara ──
   if(vrMode&&gyroOK){
+    const prevQ=cam.quaternion.clone();
     cam.quaternion.copy(GQ);
+    // Si la cámara se movió mucho en este frame, resetear gaze timer
+    const camMovement=prevQ.angleTo(cam.quaternion);
+    if(camMovement>0.015) { gazeDt=0; } // reset si hay movimiento > ~1 grado
   } else {
     EULER.set(pitch,yaw,0,'YXZ');
     QUAT.setFromEuler(EULER);
