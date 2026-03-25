@@ -80,14 +80,14 @@ canvas{position:fixed;top:0;left:0;}
   <div id="feedback"></div>
   <button id="btnVR" onclick="toggleVR()">⬛ Modo Cardboard VR</button>
 </div>
-
+ 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ════════════════════════════════════════
 // SONIDOS — Web Audio API (sin archivos externos)
 // ════════════════════════════════════════
 const AC = new (window.AudioContext || window.webkitAudioContext)();
-
+ 
 function playTone(freq, type, dur, vol, delay=0) {
   const o = AC.createOscillator();
   const g = AC.createGain();
@@ -99,7 +99,7 @@ function playTone(freq, type, dur, vol, delay=0) {
   o.start(AC.currentTime + delay);
   o.stop(AC.currentTime + delay + dur + 0.05);
 }
-
+ 
 function soundCorrecto() {
   // Melodía alegre ascendente
   [[523,0],[659,0.15],[784,0.30],[1047,0.45]].forEach(([f,d])=>
@@ -116,7 +116,7 @@ function soundTomar() {
 function soundColocar() {
   playTone(660,'sine',0.15,0.1);
 }
-
+ 
 // Música de fondo — loop suave
 function startBgMusic() {
   const notes = [261,293,329,349,392,440,493,523];
@@ -129,14 +129,14 @@ function startBgMusic() {
   }
   setTimeout(playNext, 1000);
 }
-
+ 
 // Desbloquear AudioContext en móvil (requiere interacción)
 function unlockAudio() {
   if(AC.state === 'suspended') AC.resume();
 }
 document.addEventListener('touchstart', unlockAudio, {once:true});
 document.addEventListener('click', unlockAudio, {once:true});
-
+ 
 // ════════════════════════════════════════
 // ORACIONES
 // ════════════════════════════════════════
@@ -162,7 +162,7 @@ const ORACIONES=[
   ["El","bebé","llora","con","fuerza"],
   ["Los","árboles","crecen","en","el","bosque"]
 ];
-
+ 
 // ════════════════════════════════════════
 // RENDERER — alta calidad
 // ════════════════════════════════════════
@@ -176,7 +176,7 @@ renderer.autoClear = false;
 renderer.shadowMap.enabled = false;
 canvas.style.width  = innerWidth  + 'px';
 canvas.style.height = innerHeight + 'px';
-
+ 
 // ════════════════════════════════════════
 // ESCENA
 // ════════════════════════════════════════
@@ -188,13 +188,13 @@ const dl = new THREE.DirectionalLight(0xfff0cc, 0.7);
 dl.position.set(4, 9, 3); scene.add(dl);
 const dl2 = new THREE.DirectionalLight(0xccddff, 0.3);
 dl2.position.set(-3, 5, 5); scene.add(dl2);
-
+ 
 const cam = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 60);
 cam.position.set(0, 1.6, 0.8);
-
+ 
 // Orientación inicial: mirando al pizarrón
 let yaw = 0, pitch = -0.06;
-
+ 
 // ════════════════════════════════════════
 // SALÓN — geometría mejorada
 // ════════════════════════════════════════
@@ -207,7 +207,7 @@ function addBox(w,h,d,col,x,y,z,ry=0) {
   if(ry) m.rotation.y = ry;
   scene.add(m); return m;
 }
-
+ 
 // Piso con textura procedural
 (()=>{
   const cv=document.createElement('canvas'); cv.width=512; cv.height=512;
@@ -225,7 +225,7 @@ function addBox(w,h,d,col,x,y,z,ry=0) {
     new THREE.MeshLambertMaterial({map:t}));
   m.rotation.x=-Math.PI/2; scene.add(m);
 })();
-
+ 
 // Techo con textura
 (()=>{
   const cv=document.createElement('canvas'); cv.width=256; cv.height=256;
@@ -239,14 +239,14 @@ function addBox(w,h,d,col,x,y,z,ry=0) {
     new THREE.MeshLambertMaterial({map:t}));
   m.rotation.x=Math.PI/2; m.position.y=4; scene.add(m);
 })();
-
+ 
 // Paredes
 const wallMat = new THREE.MeshLambertMaterial({color:0xf2ede0});
 [[16,4.1,.15,0,2,-5],[16,4.1,.15,0,2,5],[.15,4.1,14,-7,2,0],[.15,4.1,14,7,2,0]].forEach(([w,h,d,x,y,z])=>{
   const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),wallMat);
   m.position.set(x,y,z); scene.add(m);
 });
-
+ 
 // Ventanas izquierda con luz
 const winMat=new THREE.MeshLambertMaterial({color:0xd4eeff,transparent:true,opacity:.55});
 const frameMat=new THREE.MeshLambertMaterial({color:0x8B6914});
@@ -259,7 +259,7 @@ const frameMat=new THREE.MeshLambertMaterial({color:0x8B6914});
   const wl=new THREE.PointLight(0xfff8cc,0.5,6);
   wl.position.set(-5.5,2.6,z); scene.add(wl);
 });
-
+ 
 // Pizarrón — superficie verde oscuro
 addBox(7.2,3.2,.12,0x1a4a28,0,2.2,-4.9);
 // Marco doble
@@ -276,7 +276,7 @@ addBox(.3,.08,.15,0xeeeeee,-1.5,0.72,-4.7);
 addBox(.12,1.2,.12,0x5a3010,-2.5,-0.35,-4.85);
 addBox(.12,1.2,.12,0x5a3010,2.5,-0.35,-4.85);
 addBox(5.2,.1,.12,0x5a3010,0,-0.9,-4.85);
-
+ 
 // Escritorio maestro mejorado
 addBox(2.4,.08,1.1,0x9a5a1e,0,.76,-3.5);
 addBox(2.4,.04,.8,0xb87030,0,.80,-3.5); // superficie
@@ -286,7 +286,7 @@ addBox(2.2,.04,.04,0x7a4010,0,.38,-3.95);
 addBox(2.2,.04,.04,0x7a4010,0,.38,-3.05);
 // Objeto encima del escritorio (libro)
 addBox(.4,.06,.3,0x2244aa,.5,.83,-3.5);
-
+ 
 // Mesas alumnos mejoradas
 [[-2.6,1.6],[-2.6,3.0],[2.6,1.6],[2.6,3.0],[-2.6,4.2],[2.6,4.2]].forEach(([x,z])=>{
   addBox(1.5,.07,1,0xcc7730,x,.69,z);
@@ -304,21 +304,21 @@ addBox(.4,.06,.3,0x2244aa,.5,.83,-3.5);
   // Cuaderno encima
   addBox(.35,.02,.28,0xffffff,x+.3,.73,z-.1);
 });
-
+ 
 // Decoración: poster en pared derecha
 addBox(.05,1.5,2,0xffffff,6.92,2.8,0);
 addBox(.04,1.6,2.2,0x333333,6.95,2.8,0);
-
+ 
 // Papelera
 addBox(.35,.4,.35,0x444444,-5.5,.2,4.5);
-
+ 
 // ════════════════════════════════════════
 // TARJETAS
 // ════════════════════════════════════════
 const CW=1.15, CH=0.60;
 const BZ=-4.82, WY=2.58, SY=1.40;
 let cards=[], slots=[], answer=[], held=null, qIdx=0, locked=false;
-
+ 
 function mkCard(w, bg, fg) {
   const cv=document.createElement('canvas'); cv.width=300; cv.height=150;
   const cx=cv.getContext('2d');
@@ -357,7 +357,7 @@ function mkTitle(n) {
   cx.fillText(`Oración ${n} de 20  —  Ordena las palabras`,320,36);
   return new THREE.CanvasTexture(cv);
 }
-
+ 
 let titleMesh=null;
 function setTitle(n){
   if(titleMesh) scene.remove(titleMesh);
@@ -365,7 +365,7 @@ function setTitle(n){
     new THREE.MeshBasicMaterial({map:mkTitle(n),transparent:true,depthWrite:false}));
   titleMesh.position.set(0,3.55,BZ+.07); scene.add(titleMesh);
 }
-
+ 
 function loadQ(idx){
   locked=false; held=null; qIdx=idx;
   cards.forEach(c=>scene.remove(c));
@@ -396,7 +396,7 @@ function loadQ(idx){
   setInstr('Mira una tarjeta 1.5 seg 👁️');
   gazeObj=null; gazeDt=0; setArc(0);
 }
-
+ 
 function reiniciar(){
   if(locked)return;
   held=null;
@@ -413,7 +413,7 @@ function reiniciar(){
   gazeObj=null; gazeDt=0; setArc(0);
   setInstr('Mira una tarjeta 1.5 seg 👁️');
 }
-
+ 
 function place(card,si){
   const prev=cards.find(c=>c.userData.onBoard&&c.userData.si===si);
   if(prev){
@@ -430,7 +430,7 @@ function place(card,si){
   answer[si]=card.userData.word; held=null;
   soundColocar();
 }
-
+ 
 function check(){
   if(answer.some(p=>p===null))return;
   locked=true;
@@ -455,7 +455,7 @@ function check(){
 function showFB(t,cl){const e=document.getElementById('feedback');e.textContent=t;e.className=cl+' show';}
 function hideFB(){document.getElementById('feedback').className='';}
 function setInstr(t){document.getElementById('instruccion').textContent=t;}
-
+ 
 // ════════════════════════════════════════
 // GAZE
 // ════════════════════════════════════════
@@ -469,7 +469,7 @@ function setArc(p,col){
   a.setAttribute('stroke-dashoffset',ARC_C*(1-p));
   if(col) a.setAttribute('stroke',col);
 }
-
+ 
 // ════════════════════════════════════════
 // GIROSCOPIO — correctamente implementado
 // Solo se activa en modo VR
@@ -480,10 +480,10 @@ const GQ=new THREE.Quaternion();
 const SCREEN_TO_CAM=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5));
 const tmpQ=new THREE.Quaternion(), tmpE=new THREE.Euler();
 const ZEE=new THREE.Vector3(0,0,1), QSC=new THREE.Quaternion();
-
+ 
 // Quaternion de referencia: diferencia entre primer frame giroscopio y orientación deseada
 let qRef=null;
-
+ 
 function computeGyroQuat(alpha, beta, gamma) {
   // Convertir ángulos a quaternion en frame del sensor
   tmpE.set(
@@ -500,7 +500,7 @@ function computeGyroQuat(alpha, beta, gamma) {
   tmpQ.multiply(QSC);
   return tmpQ.clone();
 }
-
+ 
 // API 1: AbsoluteOrientationSensor (más preciso, Chrome Android)
 let absSensor=null;
 function initAbsSensor(){
@@ -517,7 +517,7 @@ function initAbsSensor(){
     return true;
   } catch(e){ return false; }
 }
-
+ 
 // API 2: deviceorientation (universal)
 let lastAlpha=null;
 window.addEventListener('deviceorientation',e=>{
@@ -528,7 +528,7 @@ window.addEventListener('deviceorientation',e=>{
   const q=computeGyroQuat(e.alpha, e.beta, e.gamma);
   applyGyroQuat(q);
 },true);
-
+ 
 function applyGyroQuat(rawQ) {
   gyroOK=true;
   // Primer frame: calcular referencia para que arranque mirando al frente
@@ -541,7 +541,7 @@ function applyGyroQuat(rawQ) {
   // Suavizado estable: interpolación con factor bajo
   GQ.slerp(result, 0.1);
 }
-
+ 
 // Controles táctil / mouse (para modo normal SIN gafas)
 let drag=false,lx=0,ly=0;
 function moveCam(dx,dy){
@@ -561,21 +561,21 @@ canvas.addEventListener('touchmove',e=>{
   moveCam(e.touches[0].clientX-lx,e.touches[0].clientY-ly);
   lx=e.touches[0].clientX;ly=e.touches[0].clientY;
 },{passive:false});
-
+ 
 // ════════════════════════════════════════
 // VR CARDBOARD
 // ════════════════════════════════════════
 const LCAM=new THREE.PerspectiveCamera(80,1,.1,60);
 const RCAM=new THREE.PerspectiveCamera(80,1,.1,60);
 const IPD=0.064;
-
+ 
 function resize(){
   const W=innerWidth,H=innerHeight;
   renderer.setSize(W,H,false);
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
   cam.aspect=W/H; cam.updateProjectionMatrix();
 }
-
+ 
 function toggleVR(){
   if(!vrMode){
     // Pedir permisos
@@ -586,12 +586,12 @@ function toggleVR(){
     // Iniciar sensor absoluto
     if(!absSensor) initAbsSensor();
     if(absSensor) absSensor.start().catch(()=>{});
-
+ 
     vrMode=true; qRef=null; gyroOK=false;
     // Copiar orientación actual de cámara a GQ para transición suave
     const EU2=new THREE.Euler(pitch,yaw,0,'YXZ');
     GQ.setFromEuler(EU2);
-
+ 
     document.getElementById('btnVR').textContent='✕ Salir VR';
     document.getElementById('topright').style.display='none';
     ['instruccion','feedback'].forEach(id=>{
@@ -628,18 +628,18 @@ window.addEventListener('resize',resize);
 window.addEventListener('orientationchange',()=>setTimeout(resize,500));
 document.addEventListener('fullscreenchange',()=>setTimeout(resize,400));
 document.addEventListener('webkitfullscreenchange',()=>setTimeout(resize,400));
-
+ 
 // ════════════════════════════════════════
 // LOOP PRINCIPAL
 // ════════════════════════════════════════
 const EU3=new THREE.Euler(0,0,0,'YXZ'), QQ=new THREE.Quaternion();
 let lastT=0, running=false;
-
+ 
 function loop(now){
   requestAnimationFrame(loop);
   if(!running) return;
   const dt=Math.min(now-lastT,50); lastT=now;
-
+ 
   // Orientación cámara
   if(vrMode && gyroOK){
     cam.quaternion.copy(GQ);
@@ -648,7 +648,7 @@ function loop(now){
     QQ.setFromEuler(EU3);
     cam.quaternion.copy(QQ);
   }
-
+ 
   // Tarjeta en mano flota frente a la cámara
   if(held){
     const d=new THREE.Vector3(.22,-.18,-1.05);
@@ -656,7 +656,7 @@ function loop(now){
     held.position.copy(cam.position).add(d);
     held.quaternion.copy(cam.quaternion);
   }
-
+ 
   // Gaze raycast
   if(!locked){
     RC.setFromCamera(C2D, cam);
@@ -711,7 +711,7 @@ function loop(now){
       slots.forEach(s=>s.scale.set(1,1,1));
     }
   }
-
+ 
   // Render
   const RW=renderer.domElement.width, RH=renderer.domElement.height;
   renderer.clear();
@@ -733,7 +733,7 @@ function loop(now){
     renderer.render(scene,cam);
   }
 }
-
+ 
 function start(){
   running=true;
   unlockAudio();
