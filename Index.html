@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>Salón VR — Lecto-Escritura</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;touch-action:none;}
+canvas{position:fixed;top:0;left:0;display:block;}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:30;}
+#instruccion{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.82);border:2px solid #FFD700;color:#fff;
+  font:bold 1rem Arial,sans-serif;padding:9px 20px;border-radius:12px;
+  text-align:center;max-width:88vw;white-space:nowrap;}
+#topright{position:absolute;top:14px;right:14px;display:flex;gap:8px;
+  align-items:center;pointer-events:all;}
+#progreso{background:rgba(0,0,0,.82);border:2px solid #4CAF50;color:#fff;
+  font:bold .9rem Arial,sans-serif;padding:7px 12px;border-radius:10px;}
+#btnR{background:rgba(0,0,0,.82);border:2px solid #FF6B35;color:#FF6B35;
+  font:bold .8rem Arial,sans-serif;padding:7px 12px;border-radius:10px;cursor:pointer;}
+#gaze{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:50px;height:50px;pointer-events:none;}
+#feedback{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font:900 1.8rem Arial,sans-serif;padding:16px 32px;border-radius:16px;
+  text-align:center;opacity:0;transition:opacity .3s;pointer-events:none;}
+#feedback.show{opacity:1;}
+#feedback.ok{background:rgba(0,160,0,.92);color:#fff;border:3px solid #0f0;}
+#feedback.mal{background:rgba(190,0,0,.92);color:#fff;border:3px solid #f00;}
+#btnVR{position:absolute;bottom:18px;right:16px;pointer-events:all;
+  background:rgba(0,0,0,.82);border:2px solid #FFD700;color:#FFD700;
+  font:bold .82rem Arial,sans-serif;padding:10px 18px;border-radius:10px;cursor:pointer;}
+#inicio{position:fixed;inset:0;
+  background:radial-gradient(ellipse at 50% 35%,#1a4a8a,#0a1a3a);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:999;transition:opacity .5s;}
+#inicio.out{opacity:0;pointer-events:none;}
+.it{font:900 2rem Arial,sans-serif;color:#FFD700;text-align:center;margin-bottom:.4em;}
+.is{font:.95rem Arial,sans-serif;color:#ffffffbb;margin-bottom:1.6rem;
+  text-align:center;max-width:300px;line-height:1.5;}
+.il{font:.85rem Arial,sans-serif;color:#fff;line-height:2.1;
+  background:rgba(255,255,255,.09);padding:12px 20px;border-radius:12px;
+  max-width:300px;margin-bottom:1.6rem;}
+.ib{background:#FFD700;color:#1a1a1a;font:900 1.1rem Arial,sans-serif;
+  padding:14px 44px;border:none;border-radius:14px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="inicio">
+  <div class="it">🏫 Salón VR<br>Lecto-Escritura</div>
+  <div class="is">Forma oraciones con las tarjetas del pizarrón</div>
+  <div class="il">
+    👁️ <b>Mira</b> una tarjeta 1.5 seg → la tomas<br>
+    🔄 <b>Mueve</b> la cabeza al número<br>
+    ⏱️ <b>Mira</b> el slot 1.5 seg → la sueltas<br>
+    ✅ ¡Forma la oración!
+  </div>
+  <button class="ib" onclick="start()">¡Comenzar! 🚀</button>
+</div>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="instruccion">Mira una tarjeta 1.5 seg 👁️</div>
+  <div id="topright">
+    <button id="btnR" onclick="reiniciar()">🔄 Reiniciar</button>
+    <div id="progreso">1 / 20</div>
+  </div>
+  <svg id="gaze" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="25" cy="25" r="18" stroke="rgba(255,255,255,.3)" stroke-width="3"/>
+    <circle id="gazeArc" cx="25" cy="25" r="18"
+      stroke="#FFD700" stroke-width="3" stroke-linecap="round" fill="none"
+      stroke-dasharray="113" stroke-dashoffset="113"
+      transform="rotate(-90 25 25)"/>
+    <circle cx="25" cy="25" r="3" fill="#FFD700"/>
+  </svg>
+  <div id="feedback"></div>
+  <button id="btnVR" onclick="toggleVR()">⬛ Modo Cardboard</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ════════════════════════════════
+// ORACIONES
+// ════════════════════════════════
+const ORACIONES=[
+  ["El","gato","toma","leche"],
+  ["La","niña","lee","un","libro"],
+  ["Mi","mamá","hace","el","pan"],
+  ["El","perro","corre","en","el","parque"],
+  ["Los","niños","juegan","con","la","pelota"],
+  ["La","maestra","escribe","en","el","pizarrón"],
+  ["El","sol","brilla","en","el","cielo"],
+  ["Mi","papá","maneja","el","carro"],
+  ["La","vaca","come","pasto","verde"],
+  ["El","pájaro","canta","en","el","árbol"],
+  ["Los","patos","nadan","en","el","lago"],
+  ["Mi","hermana","pinta","un","dibujo"],
+  ["El","niño","toma","su","mochila"],
+  ["La","abuela","teje","un","suéter"],
+  ["El","conejo","salta","muy","alto"],
+  ["Los","peces","viven","en","el","mar"],
+  ["Mi","amigo","come","una","manzana"],
+  ["La","luna","sale","en","la","noche"],
+  ["El","bebé","llora","con","fuerza"],
+  ["Los","árboles","crecen","en","el","bosque"]
+];
+
+// ════════════════════════════════
+// RENDERER
+// ════════════════════════════════
+const canvas=document.getElementById('c');
+const W0=innerWidth, H0=innerHeight;
+canvas.width=W0; canvas.height=H0;
+canvas.style.width=W0+'px'; canvas.style.height=H0+'px';
+
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false});
+renderer.setPixelRatio(1); // fijo en 1 para evitar problemas móvil
+renderer.setSize(W0,H0,false);
+renderer.setClearColor(0x87CEEB,1);
+renderer.autoClear=false; // controlamos manualmente
+
+// ════════════════════════════════
+// ESCENA
+// ════════════════════════════════
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87CEEB);
+scene.fog=new THREE.Fog(0x87CEEB,18,38);
+
+// Cámara — posición inicial mirando AL FRENTE (pitch=0)
+const cam=new THREE.PerspectiveCamera(70,W0/H0,0.1,60);
+cam.position.set(0,1.6,3.8);
+// Aseguramos que mire al frente
+cam.lookAt(0,1.6,-5);
+
+// Luces simples (sin sombras para rendimiento)
+scene.add(new THREE.AmbientLight(0xfff8e7,0.9));
+const dLight=new THREE.DirectionalLight(0xffeebb,0.7);
+dLight.position.set(3,8,3);
+scene.add(dLight);
+
+// ════════════════════════════════
+// GEOMETRÍA DEL SALÓN
+// ════════════════════════════════
+function mesh(geo,mat){const m=new THREE.Mesh(geo,mat);scene.add(m);return m;}
+function box(w,h,d,col,x,y,z){
+  return mesh(new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshLambertMaterial({color:col})).position.set(x,y,z),
+    scene.children[scene.children.length-1];
+}
+// helper limpio
+function addBox(w,h,d,col,x,y,z){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshLambertMaterial({color:col}));
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+
+// Piso — color simple, sin textura para evitar el bug amarillo
+addBox(16,0.1,16, 0xc4862a, 0,-0.05,0);
+
+// Techo
+addBox(16,0.15,16, 0xf0e8d0, 0,4,0);
+
+// Paredes
+addBox(16,4,0.15, 0xf0ece0, 0,2,-5);   // frente
+addBox(16,4,0.15, 0xf0ece0, 0,2, 5);   // atrás
+addBox(0.15,4,16, 0xf0ece0,-7,2, 0);   // izq
+addBox(0.15,4,16, 0xf0ece0, 7,2, 0);   // der
+
+// Ventanas izq
+addBox(0.05,1.4,1.8, 0xc8eeff,-6.92,2.5,-2);
+addBox(0.05,1.4,1.8, 0xc8eeff,-6.92,2.5, 2);
+addBox(0.12,1.6,2.0, 0x8B6914,-6.95,2.5,-2);
+addBox(0.12,1.6,2.0, 0x8B6914,-6.95,2.5, 2);
+
+// Pizarrón
+addBox(7,3,0.1, 0x1a4a2a, 0,2.2,-4.9);
+// Marco
+addBox(7.3,0.1,0.12, 0x8B4513, 0,3.72,-4.9);
+addBox(7.3,0.1,0.12, 0x8B4513, 0,0.72,-4.9);
+addBox(0.1,3,0.12,   0x8B4513,-3.72,2.2,-4.9);
+addBox(0.1,3,0.12,   0x8B4513, 3.72,2.2,-4.9);
+addBox(7.3,0.08,0.22,0x8B4513, 0,0.72,-4.82); // repisa
+
+// Escritorio maestro
+addBox(2.2,0.07,1,  0xa0622a, 0,0.75,-3.8);
+addBox(0.06,0.75,0.9,0x7a4a1a,-1,0.37,-3.8);
+addBox(0.06,0.75,0.9,0x7a4a1a, 1,0.37,-3.8);
+
+// Mesas alumnos
+[[-2,1.5],[-2,3],[-2,4.2],[2,1.5],[2,3],[2,4.2]].forEach(([x,z])=>{
+  addBox(1.4,0.06,0.9, 0xd4883a, x,0.68,z);
+  addBox(0.05,0.68,0.8,0xa06020, x-0.65,0.34,z);
+  addBox(0.05,0.68,0.8,0xa06020, x+0.65,0.34,z);
+  addBox(0.7,0.05,0.7, 0xe8a040, x,0.42,z+0.7);
+  addBox(0.7,0.45,0.05,0xe8a040, x,0.65,z+1.0);
+});
+
+// ════════════════════════════════
+// TARJETAS
+// ════════════════════════════════
+const CW=0.72, CH=0.38;
+const BZ=-4.82; // z del pizarrón
+const WY=2.6;   // y palabras
+const SY=1.2;   // y slots
+
+let cards=[], slotMeshes=[], answer=[], held=null, qIdx=0, locked=false;
+
+function makeTex(word,bg,fg){
+  const cv=document.createElement('canvas');cv.width=256;cv.height=128;
+  const cx=cv.getContext('2d');
+  cx.fillStyle=bg; cx.fillRect(0,0,256,128);
+  cx.strokeStyle='#888';cx.lineWidth=3;cx.strokeRect(3,3,250,122);
+  const fs=word.length>7?28:word.length>5?36:44;
+  cx.font=`bold ${fs}px Arial`;cx.fillStyle=fg;
+  cx.textAlign='center';cx.textBaseline='middle';cx.fillText(word,128,60);
+  return new THREE.CanvasTexture(cv);
+}
+function makeSlotTex(n){
+  const cv=document.createElement('canvas');cv.width=256;cv.height=128;
+  const cx=cv.getContext('2d');
+  cx.fillStyle='rgba(255,255,255,0.07)';cx.fillRect(0,0,256,128);
+  cx.strokeStyle='rgba(255,255,255,0.6)';cx.lineWidth=3;cx.setLineDash([8,5]);
+  cx.strokeRect(5,5,246,118);
+  cx.font='bold 30px Arial';cx.fillStyle='rgba(255,255,255,0.4)';
+  cx.textAlign='center';cx.textBaseline='middle';cx.fillText(n+'',128,64);
+  return new THREE.CanvasTexture(cv);
+}
+function makeTitleTex(n){
+  const cv=document.createElement('canvas');cv.width=512;cv.height=60;
+  const cx=cv.getContext('2d');
+  cx.fillStyle='#1a4a2a';cx.fillRect(0,0,512,60);
+  cx.font='bold 22px Arial';cx.fillStyle='#FFD700';
+  cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillText(`Oración ${n} de 20  —  Ordena las palabras`,256,30);
+  return new THREE.CanvasTexture(cv);
+}
+
+let titleMesh=null;
+function setTitle(n){
+  if(titleMesh)scene.remove(titleMesh);
+  titleMesh=new THREE.Mesh(
+    new THREE.PlaneGeometry(6.2,0.48),
+    new THREE.MeshBasicMaterial({map:makeTitleTex(n),transparent:true,depthWrite:false})
+  );
+  titleMesh.position.set(0,3.5,BZ+0.05);
+  scene.add(titleMesh);
+}
+
+function loadQ(idx){
+  locked=false; held=null; qIdx=idx;
+  cards.forEach(c=>scene.remove(c));
+  slotMeshes.forEach(s=>scene.remove(s));
+  cards=[]; slotMeshes=[];
+  const words=ORACIONES[idx];
+  answer=new Array(words.length).fill(null);
+  const n=words.length;
+  const totalW=n*(CW+0.09);
+  const x0=-totalW/2+CW/2;
+  // Slots
+  for(let i=0;i<n;i++){
+    const m=new THREE.Mesh(
+      new THREE.PlaneGeometry(CW,CH),
+      new THREE.MeshBasicMaterial({map:makeSlotTex(i+1),transparent:true,side:THREE.DoubleSide,depthWrite:false})
+    );
+    m.position.set(x0+i*(CW+0.09),SY,BZ+0.04);
+    m.userData={isSlot:true,si:i};
+    scene.add(m); slotMeshes.push(m);
+  }
+  // Tarjetas revueltas
+  const shuffled=[...words].sort(()=>Math.random()-.5);
+  const tw2=n*(CW+0.1);
+  const x02=-tw2/2+CW/2;
+  shuffled.forEach((w,i)=>{
+    const m=new THREE.Mesh(
+      new THREE.BoxGeometry(CW,CH,0.02),
+      new THREE.MeshLambertMaterial({map:makeTex(w,'#FFFDE7','#111111')})
+    );
+    const ox=x02+i*(CW+0.1);
+    m.position.set(ox,WY,BZ+0.04);
+    m.userData={word:w,ox,oy:WY,oz:BZ+0.04,onBoard:false,si:-1};
+    scene.add(m); cards.push(m);
+  });
+  setTitle(idx+1);
+  document.getElementById('progreso').textContent=`${idx+1} / 20`;
+  setInstr('Mira una tarjeta 1.5 seg 👁️');
+  gazeObj=null; gazeDt=0; setArc(0);
+}
+
+function reiniciar(){
+  if(locked)return;
+  held=null;
+  cards.forEach(c=>{
+    if(c.userData.onBoard){
+      c.userData.onBoard=false; c.userData.si=-1;
+      c.position.set(c.userData.ox,c.userData.oy,c.userData.oz);
+      c.material.map=makeTex(c.userData.word,'#FFFDE7','#111111');
+      c.material.needsUpdate=true;
+    }
+    c.scale.set(1,1,1);
+  });
+  answer=new Array(ORACIONES[qIdx].length).fill(null);
+  gazeObj=null; gazeDt=0; setArc(0);
+  setInstr('Mira una tarjeta 1.5 seg 👁️');
+}
+
+function place(card,si){
+  const prev=cards.find(c=>c.userData.onBoard&&c.userData.si===si);
+  if(prev){
+    prev.userData.onBoard=false; prev.userData.si=-1;
+    prev.position.set(prev.userData.ox,prev.userData.oy,prev.userData.oz);
+    prev.material.map=makeTex(prev.userData.word,'#FFFDE7','#111111');
+    prev.material.needsUpdate=true;
+    answer[si]=null;
+  }
+  const sl=slotMeshes[si];
+  card.position.set(sl.position.x,sl.position.y,sl.position.z+0.01);
+  card.userData.onBoard=true; card.userData.si=si;
+  card.material.map=makeTex(card.userData.word,'#E8F5E9','#1b5e20');
+  card.material.needsUpdate=true;
+  answer[si]=card.userData.word;
+  held=null;
+}
+
+function check(){
+  if(answer.some(p=>p===null))return;
+  locked=true;
+  const cor=ORACIONES[qIdx];
+  if(cor.every((w,i)=>w===answer[i])){
+    showFB('¡Correcto! ⭐','ok');
+    setTimeout(()=>{hideFB();qIdx<19?loadQ(qIdx+1):showFin();},2000);
+  } else {
+    showFB('¡Inténtalo! 💪','mal');
+    const cv=document.createElement('canvas');cv.width=700;cv.height=60;
+    const cx=cv.getContext('2d');
+    cx.fillStyle='rgba(0,70,20,.95)';cx.fillRect(0,0,700,60);
+    cx.font='bold 24px Arial';cx.fillStyle='#FFD700';
+    cx.textAlign='center';cx.textBaseline='middle';
+    cx.fillText('✓ '+cor.join(' '),350,30);
+    if(titleMesh){titleMesh.material.map=new THREE.CanvasTexture(cv);titleMesh.material.needsUpdate=true;}
+    setTimeout(()=>{hideFB();reiniciar();locked=false;setTitle(qIdx+1);},2800);
+  }
+}
+function showFB(t,c){const e=document.getElementById('feedback');e.textContent=t;e.className=c+' show';}
+function hideFB(){document.getElementById('feedback').className='';}
+function showFin(){setInstr('🏆 ¡Completaste las 20 oraciones! ¡Excelente!');}
+function setInstr(t){document.getElementById('instruccion').textContent=t;}
+
+// ════════════════════════════════
+// GAZE
+// ════════════════════════════════
+const raycaster=new THREE.Raycaster();
+const CENTER2D=new THREE.Vector2(0,0);
+const ARC_LEN=113;
+let gazeObj=null, gazeDt=0;
+const T=1500;
+
+function setArc(pct,col){
+  const a=document.getElementById('gazeArc');
+  a.setAttribute('stroke-dashoffset', ARC_LEN*(1-pct));
+  if(col) a.setAttribute('stroke',col);
+}
+
+// ════════════════════════════════
+// CONTROLES — DEDO (portrait) / MOUSE
+// ════════════════════════════════
+let drag=false,lx=0,ly=0;
+// Empezamos mirando al frente: yaw=0, pitch=0
+let yaw=0, pitch=0;
+
+function moveCam(dx,dy){
+  yaw  -= dx*0.004;
+  pitch -= dy*0.004;
+  pitch=Math.max(-0.8,Math.min(0.3,pitch));
+}
+canvas.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;ly=e.clientY;});
+window.addEventListener('mouseup',()=>drag=false);
+window.addEventListener('mousemove',e=>{
+  if(!drag||vrMode)return;
+  moveCam(e.clientX-lx,e.clientY-ly);
+  lx=e.clientX;ly=e.clientY;
+});
+canvas.addEventListener('touchstart',e=>{lx=e.touches[0].clientX;ly=e.touches[0].clientY;},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  if(vrMode)return;
+  moveCam(e.touches[0].clientX-lx,e.touches[0].clientY-ly);
+  lx=e.touches[0].clientX;ly=e.touches[0].clientY;
+},{passive:false});
+
+// ════════════════════════════════
+// GIROSCOPIO
+// ════════════════════════════════
+let vrMode=false, gyroOK=false;
+const GQ=new THREE.Quaternion();
+// Quaternion de corrección para pasar de frame mundo a frame cámara
+const QFIX=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5));
+const QS=new THREE.Quaternion(), EU=new THREE.Euler(), ZEE=new THREE.Vector3(0,0,1);
+const GQRAW=new THREE.Quaternion();
+let aOff=null;
+
+// AbsoluteOrientationSensor
+(()=>{
+  if(!('AbsoluteOrientationSensor' in window))return;
+  try{
+    const s=new AbsoluteOrientationSensor({frequency:60,referenceFrame:'screen'});
+    s.addEventListener('reading',()=>{
+      if(!vrMode)return;
+      const q=s.quaternion; GQRAW.set(q[0],q[1],q[2],q[3]);
+      GQ.slerp(GQRAW,0.2); gyroOK=true;
+    });
+    s.start();
+  }catch(e){}
+})();
+
+// deviceorientation
+window.addEventListener('deviceorientation',e=>{
+  if(!e.alpha||!vrMode)return;
+  gyroOK=true;
+  if(aOff===null)aOff=e.alpha;
+  EU.set(
+    THREE.MathUtils.degToRad(e.beta||0),
+    THREE.MathUtils.degToRad(e.alpha-aOff),
+    -THREE.MathUtils.degToRad(e.gamma||0),
+    'YXZ'
+  );
+  GQRAW.setFromEuler(EU);
+  GQRAW.multiply(QFIX);
+  const ang=(screen.orientation||{}).angle||window.orientation||0;
+  QS.setFromAxisAngle(ZEE,-THREE.MathUtils.degToRad(ang));
+  GQRAW.multiply(QS);
+  GQ.slerp(GQRAW,0.12); // suavizado fuerte
+},true);
+
+// ════════════════════════════════
+// VR CARDBOARD
+// ════════════════════════════════
+const LCAM=new THREE.PerspectiveCamera(90,1,0.1,60);
+const RCAM=new THREE.PerspectiveCamera(90,1,0.1,60);
+const IPD=0.064;
+let vrW=0, vrH=0;
+
+function resizeVR(){
+  // Usar el tamaño actual del viewport
+  const W=window.innerWidth, H=window.innerHeight;
+  vrW=W; vrH=H;
+  renderer.setSize(W,H,false);
+  canvas.style.width=W+'px';
+  canvas.style.height=H+'px';
+  cam.aspect=W/H; cam.updateProjectionMatrix();
+}
+
+function toggleVR(){
+  if(!vrMode){
+    if(typeof DeviceOrientationEvent!=='undefined'&&
+       typeof DeviceOrientationEvent.requestPermission==='function'){
+      DeviceOrientationEvent.requestPermission().catch(()=>{});
+    }
+    vrMode=true; aOff=null; gyroOK=false;
+    document.getElementById('btnVR').textContent='✕ Salir VR';
+    document.getElementById('topright').style.display='none';
+    // Mover UI al ojo izquierdo
+    ['instruccion','feedback'].forEach(id=>{
+      const e=document.getElementById(id);
+      e.style.left='25%'; e.style.transform='translateX(-50%)';
+    });
+    document.getElementById('gaze').style.left='25%';
+    document.getElementById('gaze').style.transform='translate(-50%,-50%)';
+    // Fullscreen
+    const el=document.documentElement;
+    (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||
+     function(){}
+    ).call(el).catch(()=>{});
+    if(screen.orientation&&screen.orientation.lock)
+      screen.orientation.lock('landscape').catch(()=>{});
+    setTimeout(resizeVR,300);
+    setTimeout(resizeVR,700);
+    setTimeout(resizeVR,1400);
+  } else {
+    vrMode=false;
+    document.getElementById('btnVR').textContent='⬛ Modo Cardboard';
+    document.getElementById('topright').style.display='flex';
+    ['instruccion','feedback'].forEach(id=>{
+      const e=document.getElementById(id);
+      e.style.left='50%'; e.style.transform='translateX(-50%)';
+    });
+    document.getElementById('gaze').style.left='50%';
+    document.getElementById('gaze').style.transform='translate(-50%,-50%)';
+    (document.exitFullscreen||document.webkitExitFullscreen||function(){}
+    ).call(document).catch(()=>{});
+    if(screen.orientation&&screen.orientation.unlock)screen.orientation.unlock();
+    setTimeout(resizeVR,300);
+  }
+}
+
+window.addEventListener('resize',resizeVR);
+window.addEventListener('orientationchange',()=>setTimeout(resizeVR,500));
+document.addEventListener('fullscreenchange',()=>setTimeout(resizeVR,350));
+document.addEventListener('webkitfullscreenchange',()=>setTimeout(resizeVR,350));
+
+// ════════════════════════════════
+// LOOP
+// ════════════════════════════════
+const EULER=new THREE.Euler(0,0,0,'YXZ');
+const QUAT=new THREE.Quaternion();
+let lastT=0, running=false;
+
+function loop(t){
+  requestAnimationFrame(loop);
+  if(!running)return;
+  const dt=Math.min(t-lastT,50); lastT=t;
+
+  // ── Orientación cámara ──
+  if(vrMode&&gyroOK){
+    cam.quaternion.copy(GQ);
+  } else {
+    EULER.set(pitch,yaw,0,'YXZ');
+    QUAT.setFromEuler(EULER);
+    cam.quaternion.copy(QUAT);
+  }
+
+  // ── Tarjeta en mano ──
+  if(held){
+    const d=new THREE.Vector3(0.25,-0.2,-1.1);
+    d.applyQuaternion(cam.quaternion);
+    held.position.copy(cam.position).add(d);
+    held.quaternion.copy(cam.quaternion);
+  }
+
+  // ── Gaze raycast ──
+  if(!locked){
+    raycaster.setFromCamera(CENTER2D,cam);
+    const targets=[
+      ...cards.filter(c=>c!==held),
+      ...slotMeshes
+    ];
+    const hits=raycaster.intersectObjects(targets);
+    const hit=hits.length?hits[0].object:null;
+
+    if(hit!==gazeObj){gazeObj=hit;gazeDt=0;setArc(0,'#FFD700');}
+
+    if(gazeObj){
+      gazeDt+=dt;
+      if(!held){
+        if(!gazeObj.userData.onBoard&&!gazeObj.userData.isSlot){
+          const p=Math.min(gazeDt/T,1);
+          setArc(p,'#FFD700');
+          gazeObj.scale.set(1+p*.06,1+p*.06,1);
+          if(gazeDt>=T){
+            held=gazeObj; gazeObj.scale.set(1.05,1.05,1);
+            gazeObj=null;gazeDt=0;setArc(0);
+            setInstr('¡Tomada! Mira un número 🎯');
+          }
+        } else if(gazeObj.userData.onBoard){
+          const p=Math.min(gazeDt/T,1);
+          setArc(p,'#FF6644');
+          if(gazeDt>=T){
+            gazeObj.userData.onBoard=false;
+            answer[gazeObj.userData.si]=null;
+            gazeObj.userData.si=-1;
+            gazeObj.material.map=makeTex(gazeObj.userData.word,'#FFFDE7','#111111');
+            gazeObj.material.needsUpdate=true;
+            held=gazeObj; gazeObj=null;gazeDt=0;setArc(0);
+            setInstr('¡Tomada! Mira un número 🎯');
+          }
+        } else setArc(0);
+      } else {
+        if(gazeObj.userData.isSlot){
+          const p=Math.min(gazeDt/T,1);
+          setArc(p,'#00FF88');
+          slotMeshes[gazeObj.userData.si].scale.set(1+p*.08,1+p*.08,1);
+          if(gazeDt>=T){
+            place(held,gazeObj.userData.si);
+            slotMeshes.forEach(s=>s.scale.set(1,1,1));
+            gazeObj=null;gazeDt=0;setArc(0);
+            setInstr('Mira una tarjeta 1.5 seg 👁️');
+            check();
+          }
+        } else setArc(0);
+      }
+    } else {
+      setArc(0,'#FFD700');
+      if(!held)cards.forEach(c=>c.scale.set(1,1,1));
+      slotMeshes.forEach(s=>s.scale.set(1,1,1));
+    }
+  }
+
+  // ── Render ──
+  const RW=renderer.domElement.width;
+  const RH=renderer.domElement.height;
+
+  renderer.clear();
+
+  if(vrMode){
+    const HW=Math.floor(RW/2);
+    const asp=HW/RH;
+
+    LCAM.aspect=asp; LCAM.fov=90; LCAM.updateProjectionMatrix();
+    LCAM.position.copy(cam.position); LCAM.quaternion.copy(cam.quaternion); LCAM.translateX(-IPD/2);
+
+    RCAM.aspect=asp; RCAM.fov=90; RCAM.updateProjectionMatrix();
+    RCAM.position.copy(cam.position); RCAM.quaternion.copy(cam.quaternion); RCAM.translateX(IPD/2);
+
+    renderer.setScissorTest(true);
+    renderer.setViewport(0,0,HW,RH); renderer.setScissor(0,0,HW,RH);
+    renderer.clear(); renderer.render(scene,LCAM);
+
+    renderer.setViewport(HW,0,HW,RH); renderer.setScissor(HW,0,HW,RH);
+    renderer.clear(); renderer.render(scene,RCAM);
+
+    renderer.setScissorTest(false);
+  } else {
+    renderer.setScissorTest(false);
+    renderer.setViewport(0,0,RW,RH);
+    renderer.render(scene,cam);
+  }
+}
+
+// ════════════════════════════════
+// INICIO
+// ════════════════════════════════
+function start(){
+  running=true;
+  document.getElementById('inicio').classList.add('out');
+  setTimeout(()=>document.getElementById('inicio').remove(),600);
+  loadQ(0);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
