@@ -508,6 +508,12 @@ let absSensor=null;
 function initAbsSensor(){
   if(!('AbsoluteOrientationSensor' in window)) return false;
   try {
+    // Pedir permisos de sensores (Chrome Android moderno)
+    Promise.all([
+      navigator.permissions.query({name:'accelerometer'}),
+      navigator.permissions.query({name:'gyroscope'}),
+      navigator.permissions.query({name:'magnetometer'})
+    ]).catch(()=>[]);
     absSensor=new AbsoluteOrientationSensor({frequency:60,referenceFrame:'screen'});
     absSensor.addEventListener('reading',()=>{
       if(!vrMode) return;
@@ -515,9 +521,15 @@ function initAbsSensor(){
       tmpQ.set(q[0],q[1],q[2],q[3]);
       applyGyroQuat(tmpQ);
     });
-    absSensor.addEventListener('error',()=>{ absSensor=null; });
+    absSensor.addEventListener('error',(e)=>{ 
+      console.log('Sensor error:',e); 
+      absSensor=null; 
+    });
     return true;
-  } catch(e){ return false; }
+  } catch(e){ 
+    console.log('No AbsoluteOrientationSensor:',e);
+    return false; 
+  }
 }
 
 // API 2: deviceorientation (universal)
@@ -578,40 +590,56 @@ function resize(){
   cam.aspect=W/H; cam.updateProjectionMatrix();
 }
 
+function activarVR(){
+  vrMode=true; qRef=null; gyroOK=false;
+  const EU2=new THREE.Euler(pitch,yaw,0,'YXZ');
+  GQ.setFromEuler(EU2);
+
+  document.getElementById('btnVR').textContent='✕ Salir VR';
+  document.getElementById('topright').style.display='none';
+  ['instruccion','feedback'].forEach(id=>{
+    const e=document.getElementById(id);
+    e.style.left='25%'; e.style.transform='translateX(-50%)';
+  });
+  document.getElementById('gaze').style.left='25%';
+  document.getElementById('gaze').style.transform='translate(-50%,-50%)';
+
+  // Fullscreen
+  const el=document.documentElement;
+  const fsReq=el.requestFullscreen||el.webkitRequestFullscreen||
+               el.mozRequestFullScreen||el.msRequestFullscreen;
+  if(fsReq) fsReq.call(el).catch(()=>{});
+
+  // Landscape
+  if(screen.orientation&&screen.orientation.lock)
+    screen.orientation.lock('landscape').catch(()=>{});
+
+  // Iniciar sensor absoluto si disponible
+  if(!absSensor) initAbsSensor();
+  if(absSensor) absSensor.start().catch(()=>{});
+
+  setTimeout(resize,300); setTimeout(resize,800); setTimeout(resize,1500);
+}
+
 function toggleVR(){
   if(!vrMode){
-    // Pedir permisos
+    // iOS necesita requestPermission en respuesta directa al toque
     if(typeof DeviceOrientationEvent!=='undefined'&&
        typeof DeviceOrientationEvent.requestPermission==='function'){
-      DeviceOrientationEvent.requestPermission().catch(()=>{});
+      DeviceOrientationEvent.requestPermission()
+        .then(state=>{
+          if(state==='granted') activarVR();
+          else { alert('Permiso de giroscopio denegado. Ve a Ajustes > Safari > Movimiento.'); }
+        })
+        .catch(()=>activarVR()); // si falla el permiso, activar de todas formas
+    } else {
+      // Android Chrome: no necesita permiso explícito
+      activarVR();
     }
-    // Iniciar sensor absoluto
-    if(!absSensor) initAbsSensor();
-    if(absSensor) absSensor.start().catch(()=>{});
-
-    vrMode=true; qRef=null; gyroOK=false;
-    // Copiar orientación actual de cámara a GQ para transición suave
-    const EU2=new THREE.Euler(pitch,yaw,0,'YXZ');
-    GQ.setFromEuler(EU2);
-
-    document.getElementById('btnVR').textContent='✕ Salir VR';
-    document.getElementById('topright').style.display='none';
-    ['instruccion','feedback'].forEach(id=>{
-      const e=document.getElementById(id);
-      e.style.left='25%'; e.style.transform='translateX(-50%)';
-    });
-    document.getElementById('gaze').style.left='25%';
-    document.getElementById('gaze').style.transform='translate(-50%,-50%)';
-    // Fullscreen + landscape
-    const el=document.documentElement;
-    (el.requestFullscreen||el.webkitRequestFullscreen||function(){}
-    ).call(el).catch(()=>{});
-    if(screen.orientation&&screen.orientation.lock)
-      screen.orientation.lock('landscape').catch(()=>{});
-    setTimeout(resize,300); setTimeout(resize,800);
   } else {
     vrMode=false; gyroOK=false; qRef=null;
-    if(absSensor) absSensor.stop().catch(()=>{});
+    if(absSensor){ try{absSensor.stop();}catch(e){} }
+
     document.getElementById('btnVR').textContent='⬛ Modo Cardboard VR';
     document.getElementById('topright').style.display='flex';
     ['instruccion','feedback'].forEach(id=>{
@@ -620,8 +648,10 @@ function toggleVR(){
     });
     document.getElementById('gaze').style.left='50%';
     document.getElementById('gaze').style.transform='translate(-50%,-50%)';
-    (document.exitFullscreen||document.webkitExitFullscreen||function(){}
-    ).call(document).catch(()=>{});
+
+    const fsExit=document.exitFullscreen||document.webkitExitFullscreen||
+                  document.mozCancelFullScreen||document.msExitFullscreen;
+    if(fsExit) fsExit.call(document).catch(()=>{});
     if(screen.orientation&&screen.orientation.unlock) screen.orientation.unlock();
     setTimeout(resize,300);
   }
